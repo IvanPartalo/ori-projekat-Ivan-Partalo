@@ -56,8 +56,8 @@ LR = 1e-4
 epsilon = 1
 policy_net = DQN(7, 8).to(device)
 target_net = DQN(7, 8).to(device)
-target_net.load_state_dict(policy_net.state_dict())
-
+policy_net.load_state_dict(torch.load('model sa vise kutija/model_ 600.00.pth'))
+target_net.load_state_dict(torch.load('model sa vise kutija/model_ 600.00.pth'))
 optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
 memory = ReplayMemory(30000)
 
@@ -68,7 +68,7 @@ def select_action(state):
     sample = random.random()
     global epsilon
 
-    if sample > epsilon:
+    if sample > 0.00125:
         with torch.no_grad():
             #max(dim=1) vrati najveci broj u izlazu, [1] vrati indeks gde je nadjen (a to je akcija koja ce se izvrsiti)
             return policy_net(state).max(dim=1)[1].view(1, 1)
@@ -182,9 +182,9 @@ class Robot(pygame.sprite.Sprite):
     def update(self, dir):
         self.old_rect = self.rect.copy()
         self.move(dir)
-        self.pos.x += self.direction.x * self.speed
+        self.pos.x += self.direction.x * self.speed * 0.1
         self.rect.x = round(self.pos.x)
-        self.pos.y += self.direction.y * self.speed
+        self.pos.y += self.direction.y * self.speed * 0.1
         self.rect.y = round(self.pos.y)
 
 
@@ -205,7 +205,7 @@ class Box(pygame.sprite.Sprite):
         self.done = False
 
     def is_end(self):
-        if self.rect.bottom <= 120 and self.rect.top >= 60 and self.rect.left >= 60 and self.rect.right <= 120:
+        if self.rect.bottom <= 125 and self.rect.top >= 55 and self.rect.left >= 55 and self.rect.right <= 125:
             self.attachable = False
             self.attached_left = False
             self.attached_up = False
@@ -295,9 +295,11 @@ class Warehouse():
         self.robot = Robot([self.all_sprites, self.collision_sprites])
         self.box1 = Box(self.all_sprites, 45, 40)
         self.box2 = Box(self.all_sprites, 45, 60)
+        self.box3 = Box(self.all_sprites, 45, 60)
         self.boxes=[]
         self.boxes.append(self.box1)
         self.boxes.append(self.box2)
+        self.boxes.append(self.box3)
         self.current_box = self.box1
         self.done = False
         self.reward = 0
@@ -348,7 +350,7 @@ class Warehouse():
         return x, y
 
     def position_possible(self, x, y):
-        if (x-5) > 59 and (y-5) > 59 and (x+5) < 122 and (y+5) < 122:
+        if (x-5) > 54 and (y-5) > 54 and (x+5) < 126 and (y+5) < 126:
             return False
         return True
 
@@ -358,6 +360,7 @@ class Warehouse():
     def change_target(self):
         for box in self.boxes:
             if not box.done:
+                print('target changed')
                 self.current_box.attachable = True
                 self.current_box = box
 
@@ -385,7 +388,7 @@ class Warehouse():
        
     def step(self, dir):
         self.screen.fill('white')
-        pygame.draw.rect(self.screen, (231, 255, 182), pygame.Rect(60, 60, 60, 60))
+        pygame.draw.rect(self.screen, (231, 255, 182), pygame.Rect(55, 55, 70, 70))
         self.all_sprites.update(dir)
         if self.current_box.attached:
             self.current_box.move_with_robot(self.robot.rect.center[0], self.robot.rect.center[1])
@@ -432,24 +435,8 @@ for i_episode in range(3000):
         else:
             next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
 
-        memory.push(state, action, next_state, reward)
-
         state = next_state
 
-        optimize_model()
-
-        target_net_state_dict = target_net.state_dict()
-        policy_net_state_dict = policy_net.state_dict()
-        for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
-        target_net.load_state_dict(target_net_state_dict)
-
         step+=1
-        if(step > 2000):
+        if(step > 3000):
             done=True
-    if (i_episode % 50) == 0:
-        torch.save(target_net.state_dict(), f'model sa vise kutija/model_{i_episode:>7.2f}.pth')
-    #postepeno smanjivanje epsilon
-    if epsilon > MIN_EPSILON:
-        epsilon *= EPS_DECAY
-        epsilon = max(MIN_EPSILON, epsilon)
