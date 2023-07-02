@@ -264,7 +264,6 @@ class Box(pygame.sprite.Sprite):
     def is_closer_to_target(self):
         old_dist = 0
         dist = 0
-        # znaci umesto ovako zakucanih vrednosti bolje je da promenim na neke "konstante" koje cu menjati
         old_dist = abs(self.old_rect.center[0] - 90) + abs(self.old_rect.center[1] - 90)
         dist = abs(self.rect.center[0] - 90) + abs(self.rect.center[1] - 90)
         if dist < old_dist:
@@ -275,7 +274,6 @@ class Box(pygame.sprite.Sprite):
     def is_further_from_target(self):
         old_dist = 0
         dist = 0
-        # znaci umesto ovako zakucanih vrednosti bolje je da promenim na neke "konstante" koje cu menjati
         old_dist = abs(self.old_rect.center[0] - 90) + abs(self.old_rect.center[1] - 90)
         dist = abs(self.rect.center[0] - 90) + abs(self.rect.center[1] - 90)
         if dist > old_dist:

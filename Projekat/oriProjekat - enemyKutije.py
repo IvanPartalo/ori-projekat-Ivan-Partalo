@@ -1,5 +1,3 @@
-# pomoc za implementaciju DQN-a nadjena na pytorch tutorijalu za DQN
-# https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
 import numpy as np
 import pygame
 import random
@@ -11,8 +9,6 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
-
-# if GPU is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 Transition = namedtuple('Transition',
@@ -24,6 +20,7 @@ class ReplayMemory(object):
         self.memory = deque([], maxlen=capacity)
 
     def push(self, *args):
+        """Save a transition"""
         self.memory.append(Transition(*args))
 
     def sample(self, batch_size):
@@ -38,39 +35,39 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
         self.layer1 = nn.Linear(n_observations, 256)
         self.layer2 = nn.Linear(256, 256)
-        self.layer3 = nn.Linear(256, n_actions)
+        self.layer3 = nn.Linear(256, 256)
+        self.layer4 = nn.Linear(256, n_actions)
 
     def forward(self, x):
         x = F.relu(self.layer1(x))
         x = F.relu(self.layer2(x))
-        return self.layer3(x)
+        x = F.relu(self.layer3(x))
+        return self.layer4(x)
 
-
-# TAU is the update rate of the target network
 BATCH_SIZE = 128
 GAMMA = 0.99
-EPS_DECAY = 0.99
+EPS_DECAY = 0.993
 MIN_EPSILON = 0.001
 TAU = 0.005
 LR = 1e-4
 epsilon = 1
-policy_net = DQN(7, 8).to(device)
-target_net = DQN(7, 8).to(device)
-policy_net.load_state_dict(torch.load('model sa vise kutija/model_ 600.00.pth'))
-target_net.load_state_dict(torch.load('model sa vise kutija/model_ 600.00.pth'))
+policy_net = DQN(11, 8).to(device)
+target_net = DQN(11, 8).to(device)
+target_net.load_state_dict(policy_net.state_dict())
 optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
 memory = ReplayMemory(30000)
 
 action = 0
+steps_done = 0
 
 
 def select_action(state):
+    global steps_done
     sample = random.random()
     global epsilon
-
-    if sample > 0.125:
+    if sample > epsilon:
         with torch.no_grad():
-            #max(dim=1) vrati najveci broj u izlazu, [1] vrati indeks gde je nadjen (a to je akcija koja ce se izvrsiti)
+
             return policy_net(state).max(dim=1)[1].view(1, 1)
     else:
         rand_action = np.random.randint(0, 8)
@@ -86,8 +83,6 @@ def optimize_model():
 
     batch = Transition(*zip(*transitions))
 
-    # Compute a mask of non-final states and concatenate the batch elements
-    # (a final state would've been the one after which simulation ended)
     non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
                                           batch.next_state)), device=device, dtype=torch.bool)
     non_final_next_states = torch.cat([s for s in batch.next_state
@@ -96,23 +91,15 @@ def optimize_model():
     action_batch = torch.cat(batch.action)
     reward_batch = torch.cat(batch.reward)
 
-    # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-    # columns of actions taken. These are the actions which would've been taken
-    # for each batch state according to policy_net
 
     state_action_values = policy_net(state_batch).gather(1, action_batch)
 
-
-    # Qnew = reward + gamma*maximumFutureQ
-    # This is merged based on the mask, such that we'll have either the expected
-    # state value or 0 in case the state was final.
     next_state_values = torch.zeros(BATCH_SIZE, device=device)
     with torch.no_grad():
         next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0]
 
-    expected_state_action_values = reward_batch + next_state_values * GAMMA
+    expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
-    # Srednja kvadratna greska izmedju predvidjenih Q(s,a) neuronske mreze i izracunatih Q(s,a) iz formule, na osnovu ovoga se uci neuronska mreza.
     criterion = nn.MSELoss()
     loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
 
@@ -121,27 +108,67 @@ def optimize_model():
     torch.nn.utils.clip_grad_value_(policy_net.parameters(), 100)
     optimizer.step()
 
+
 class Robot(pygame.sprite.Sprite):
     def __init__(self, groups):
         super().__init__(groups)
+
         self.image = pygame.Surface((10, 10))
         self.image.fill((255,0,0))
         self.rect = self.image.get_rect(topleft = (90, 130))
-        self.pos = pygame.math.Vector2(self.rect.topleft)
+        self.old_rect = self.rect.copy()
+        self.pos = pygame.math.Vector2(self.rect.center)
         self.direction = pygame.math.Vector2()
         self.speed = 2
+        self.remembered_actions = deque([-1, -1, -1, -1], maxlen=4)
+        self.target_left = 0
+        self.target_right = 0
+        self.target_bottom = 0
+        self.target_up = 0
+
+    def update_target_pos(self, x, y):
+        if x-5 < self.rect.center[0] < x+5:
+            self.target_left = 0
+            self.target_right = 0
+        elif (self.rect.center[0] < x):
+            self.target_left = 0
+            self.target_right = 1
+        else:
+            self.target_left = 1
+            self.target_right = 0
+
+        if y - 5 < self.rect.center[1] < y + 5:
+            self.target_bottom = 0
+            self.target_up = 0
+        elif (self.rect.center[1] < y):
+            self.target_bottom = 1
+            self.target_up = 0
+        else:
+            self.target_bottom = 0
+            self.target_up = 1
+
+    def is_repeating(self):
+        if self.remembered_actions[0] == self.remembered_actions[1] == self.remembered_actions[2] == \
+                self.remembered_actions[3]:
+            return False
+        elif (self.remembered_actions[0] == self.remembered_actions[2]) and (
+                self.remembered_actions[1] == self.remembered_actions[3]):
+            return True
+        else:
+            return False
+
     def move(self, dir):
-        
-        if dir == 0: 
+
+        if dir == 0:
             self.direction.y = -1
             self.direction.x = 0
-        elif dir == 1: 
+        elif dir == 1:
             self.direction.y = 1
             self.direction.x = 0
-        elif dir == 2: 
+        elif dir == 2:
             self.direction.x = -1
             self.direction.y = 0
-        elif dir == 3: 
+        elif dir == 3:
             self.direction.x = 1
             self.direction.y = 0
         elif dir == 4:
@@ -160,7 +187,7 @@ class Robot(pygame.sprite.Sprite):
             self.direction.x = 0
             self.direction.y = 0
 
-    def collided_with_window(self):
+    def window_collision(self):
         if self.rect.left < 0:
             self.rect.left = 0
             self.pos.x = self.rect.x
@@ -169,27 +196,65 @@ class Robot(pygame.sprite.Sprite):
             self.rect.right = 200
             self.pos.x = self.rect.x
             return True
-        if self.rect.top < 0:
-            self.rect.top = 0
-            self.pos.y = self.rect.y
-            return True
         if self.rect.bottom > 200:
             self.rect.bottom = 200
             self.pos.y = self.rect.y
             return True
-        return False    
+        return False
 
     def update(self, dir):
         self.old_rect = self.rect.copy()
         self.move(dir)
-        self.pos.x += self.direction.x * self.speed * 0.1
+
+        self.pos.x += self.direction.x * self.speed
         self.rect.x = round(self.pos.x)
-        self.pos.y += self.direction.y * self.speed * 0.1
+        self.pos.y += self.direction.y * self.speed
         self.rect.y = round(self.pos.y)
 
 
+class EnemyBox(pygame.sprite.Sprite):
+    def __init__(self, groups, obstacles, x, y):
+        super().__init__(groups)
+        self.image = pygame.Surface((20, 20))
+        self.image.fill('gray')
+        self.rect = self.image.get_rect(center=(x, y))
+        self.pos = pygame.math.Vector2(self.rect.center)
+        self.old_rect = self.rect.copy()
+        self.obstacles = obstacles
+
+    # pomoc za koliziju nadjena na youtube tutorijalu
+    def collision(self, direction):
+        collision_sprites = pygame.sprite.spritecollide(self, self.obstacles, False)
+        if collision_sprites:
+            if direction == 'horizontal':
+                for sprite in collision_sprites:
+                    if self.rect.right >= sprite.rect.left and self.old_rect.right <= sprite.old_rect.left:
+                        self.rect.right = sprite.rect.left
+                        self.pos.x = self.rect.x
+                    if self.rect.left <= sprite.rect.right and self.old_rect.left >= sprite.old_rect.right:
+                        self.rect.left = sprite.rect.right
+                        self.pos.x = self.rect.x
+
+            if direction == 'vertical':
+                for sprite in collision_sprites:
+                    if self.rect.bottom >= sprite.rect.top and self.old_rect.bottom <= sprite.old_rect.top:
+                        self.rect.bottom = sprite.rect.top
+                        self.pos.y = self.rect.y
+                    if self.rect.top <= sprite.rect.bottom and self.old_rect.top >= sprite.old_rect.bottom:
+                        self.rect.top = sprite.rect.bottom
+                        self.pos.y = self.rect.y
+
+    def hitted(self):
+        old_dist = abs(self.old_rect.center[1])
+        dist = abs(self.rect.center[1])
+        return dist - old_dist
+    def update(self, dir):
+        self.old_rect = self.rect.copy()
+        self.collision('horizontal')
+        self.collision('vertical')
+
 class Box(pygame.sprite.Sprite):
-    def __init__(self, groups, x, y):
+    def __init__(self, groups, obstacles, x, y):
         super().__init__(groups)
         self.image = pygame.Surface((10, 10))
         self.image.fill('blue')
@@ -200,12 +265,12 @@ class Box(pygame.sprite.Sprite):
         self.attached_left = False
         self.attached_bottom = False
         self.attached_up = False
+        self.attachable = True
         self.attached = 0
         self.difference = 0
         self.done = False
-
     def is_end(self):
-        if self.rect.bottom <= 125 and self.rect.top >= 55 and self.rect.left >= 55 and self.rect.right <= 125:
+        if self.rect.bottom <= 20:
             self.attachable = False
             self.attached_left = False
             self.attached_up = False
@@ -217,29 +282,42 @@ class Box(pygame.sprite.Sprite):
             self.attachable = True
             return False
 
-    def check_if_robot_attached(self, x, y):
-        if y - 13 <= self.rect.bottom <= y - 7 and self.rect.center[0] - 10 <= x <= self.rect.center[0] + 10:
-            self.difference = self.rect.center[0] - x
-            self.attached = 1
-            self.attached_bottom = True
-        if self.rect.center[1] - 10 <= y <= self.rect.center[1] + 10 and x + 7 <= self.rect.left <= x + 13:
-            self.difference = self.rect.center[1] - y
-            self.attached = 1
-            self.attached_left = True
-        if y + 7 <= self.rect.top <= y + 13 and self.rect.center[0] - 10 <= x <= self.rect.center[0] + 10:
-            self.difference = self.rect.center[0] - x
-            self.attached = 1
-            self.attached_up = True
-        if self.rect.center[1] - 10 <= y <= self.rect.center[1] + 10 and x - 13 <= self.rect.right <= x - 7:
-            self.difference = self.rect.center[1] - y
-            self.attached = 1
-            self.attached_right = True
+    def is_closer_to_target(self):
+        old_dist = abs(self.old_rect.center[1])
+        dist = abs(self.rect.center[1])
+        if dist < old_dist:
+            return True
+        else:
+            return False
 
-    
+    def is_further_from_target(self):
+        old_dist = abs(self.old_rect.center[1])
+        dist = abs(self.rect.center[1])
+        if dist > old_dist:
+            return True
+        else:
+            return False
+
+    def check_if_robot_attached(self, x, y):
+        if self.attachable:
+            if y - 13 <= self.rect.bottom <= y - 7 and self.rect.center[0] - 11 <= x <= self.rect.center[0] + 11:
+                self.difference = self.rect.center[0] - x
+                self.attached = 1
+                self.attached_bottom = True
+            if self.rect.center[1] - 11 <= y <= self.rect.center[1] + 11 and x + 7 <= self.rect.left <= x + 13:
+                self.difference = self.rect.center[1] - y
+                self.attached = 1
+                self.attached_left = True
+            if y + 7 <= self.rect.top <= y + 13 and self.rect.center[0] - 11 <= x <= self.rect.center[0] + 11:
+                self.difference = self.rect.center[0] - x
+                self.attached = 1
+                self.attached_up = True
+            if self.rect.center[1] - 11 <= y <= self.rect.center[1] + 11 and x - 13 <= self.rect.right <= x - 7:
+                self.difference = self.rect.center[1] - y
+                self.attached = 1
+                self.attached_right = True
 
     def move_with_robot(self, x, y):
-        # cuva se pozicija gde je bila kutija kada ju je robot prikljucio
-        # posto se salje centar robota, sabira/oduzima se sa 5 
         if self.attached_bottom:
             self.rect.right = self.difference + x + 5
             self.rect.bottom = y - 5
@@ -261,49 +339,36 @@ class Box(pygame.sprite.Sprite):
             self.pos.x = self.rect.x
             self.pos.y = self.rect.y
 
-    def is_closer_to_target(self):
-        old_dist = 0
-        dist = 0
-        # znaci umesto ovako zakucanih vrednosti bolje je da promenim na neke "konstante" koje cu menjati
-        old_dist = abs(self.old_rect.center[0] - 90) + abs(self.old_rect.center[1] - 90)
-        dist = abs(self.rect.center[0] - 90) + abs(self.rect.center[1] - 90)
-        if dist < old_dist:
-            return True
-        else:
-            return False
-
-    def is_further_from_target(self):
-        old_dist = 0
-        dist = 0
-        # znaci umesto ovako zakucanih vrednosti bolje je da promenim na neke "konstante" koje cu menjati
-        old_dist = abs(self.old_rect.center[0] - 90) + abs(self.old_rect.center[1] - 90)
-        dist = abs(self.rect.center[0] - 90) + abs(self.rect.center[1] - 90)
-        if dist > old_dist:
-            return True
-        else:
-            return False
-
     def update(self, dir):
         self.old_rect = self.rect.copy()
 
-class Warehouse():
+class warehouse():
     def __init__(self):
         pygame.init()
-        self.screen = pygame.display.set_mode((200,200), pygame.SCALED)
+        self.screen = pygame.display.set_mode((200, 200), pygame.SCALED)
         self.all_sprites = pygame.sprite.Group()
         self.collision_sprites = pygame.sprite.Group()
+        self.boxes = []
         self.robot = Robot([self.all_sprites, self.collision_sprites])
-        self.box1 = Box(self.all_sprites, 45, 40)
-        self.box2 = Box(self.all_sprites, 45, 60)
-        self.box3 = Box(self.all_sprites, 45, 60)
-        self.boxes=[]
+        self.box1 = Box(self.all_sprites, self.collision_sprites, 45, 40)
+        self.box2 = Box(self.all_sprites, self.collision_sprites, 85, 40)
         self.boxes.append(self.box1)
         self.boxes.append(self.box2)
-        self.boxes.append(self.box3)
         self.current_box = self.box1
+        self.enemyBox = EnemyBox(self.all_sprites, self.collision_sprites, 75, 140)
+        self.enemyBox1 = EnemyBox(self.all_sprites, self.collision_sprites, 75, 140)
+        self.enemyBox.obstacles.add(self.box1)
+        self.enemyBox.obstacles.add(self.box2)
+        self.enemyBox1.obstacles.add(self.box1)
+        self.enemyBox1.obstacles.add(self.box2)
+        self.enemyBox.obstacles.add(self.enemyBox1)
+        self.enemyBox1.obstacles.add(self.enemyBox)
+        self.enemies = []
+        self.enemies.append(self.enemyBox)
+        self.enemies.append(self.enemyBox1)
         self.done = False
         self.reward = 0
-        self.state = [0, 0, 0, 0, 0, 0, 0]
+        self.state = [0,0,0,0,0]
 
     def reset(self):
         self.current_box = self.box1
@@ -317,7 +382,7 @@ class Warehouse():
             box.attached = 0
 
         x, y = self.get_robot_random_pos()
-        self.robot.rect = self.robot.image.get_rect(topleft=(x, y))
+        self.robot.rect = self.robot.image.get_rect(center=(x, y))
         self.robot.old_rect = self.robot.rect.copy()
         self.robot.pos = pygame.math.Vector2(self.robot.rect.topleft)
 
@@ -325,20 +390,32 @@ class Warehouse():
             x, y = self.get_box_random_pos()
             while not self.position_possible(x, y):
                 x, y = self.get_box_random_pos()
-
             box.rect = box.image.get_rect(center=(x, y))
             box.old_rect = box.rect.copy()
             box.pos = pygame.math.Vector2(box.rect.topleft)
 
+        self.set_enemy_box_pos()
+
+        self.robot.update_target_pos(self.current_box.rect.center[0], self.current_box.rect.center[1])
         self.done = False
         self.reward = 0
-        self.state = [self.normalize(self.robot.rect.center[0]), self.normalize(self.robot.rect.center[1]),
-                      self.normalize(self.current_box.rect.center[0]),
-                      self.normalize(self.current_box.rect.center[1]),
-                      self.normalize(90), self.normalize(90),
-                      self.current_box.attached]
+        self.state = [self.robot.target_up, self.robot.target_bottom, self.robot.target_left,
+                      self.robot.target_right,
+                      self.current_box.attached,
+                      self.normalize(self.robot.rect.center[0]), self.normalize(self.robot.rect.center[1]),
+                      self.normalize(self.enemyBox.rect.center[0]),
+                      self.normalize(self.enemyBox.rect.center[1]),
+                      self.normalize(self.enemyBox1.rect.center[0]),
+                      self.normalize(self.enemyBox1.rect.center[1])]
         return self.state
 
+    def set_enemy_box_pos(self):
+        for enemy in self.enemies:
+            x = np.random.randint(32, 148)
+            y = np.random.randint(32, 148)
+            enemy.rect = enemy.image.get_rect(center=(x, y))
+            enemy.old_rect = enemy.rect.copy()
+            enemy.pos = pygame.math.Vector2(enemy.rect.topleft)
     def get_robot_random_pos(self):
         x = np.random.randint(2, 178)
         y = np.random.randint(2, 178)
@@ -350,19 +427,12 @@ class Warehouse():
         return x, y
 
     def position_possible(self, x, y):
-        if (x-5) > 54 and (y-5) > 54 and (x+5) < 126 and (y+5) < 126:
+        if x - 6 < self.robot.rect.center[0] < x + 6 and y - 6 < self.robot.rect.center[1] < y + 6:
             return False
         return True
 
     def normalize(self, x):
         return (2 * x / 200) - 1
-
-    def change_target(self):
-        for box in self.boxes:
-            if not box.done:
-                print('target changed')
-                self.current_box.attachable = True
-                self.current_box = box
 
     def is_robot_closer_to_box(self, box):
         old_dist = 0
@@ -377,19 +447,34 @@ class Warehouse():
             return False
 
     def update_reward(self):
-        if self.current_box.is_closer_to_target():
+        if self.robot.is_repeating():
+            self.reward = -0.5
+        elif self.enemyBox.hitted() != 0:
+            self.reward = self.enemyBox.hitted()/5
+        elif self.enemyBox1.hitted() != 0:
+            self.reward = self.enemyBox1.hitted()/5
+        elif self.current_box.is_closer_to_target():
             self.reward = 0.35
         elif self.current_box.is_further_from_target():
             self.reward = -0.125
         elif self.is_robot_closer_to_box(self.current_box):
-            self.reward = 0.215
+            self.reward = 0.315
         else:
             self.reward = -0.025
-       
+
+    def change_target(self):
+        for box in self.boxes:
+            if not box.done:
+                print('target changed')
+                self.current_box.attachable = True
+                self.current_box = box
+
     def step(self, dir):
         self.screen.fill('white')
-        pygame.draw.rect(self.screen, (231, 255, 182), pygame.Rect(55, 55, 70, 70))
+
+        pygame.draw.rect(self.screen, (231, 255, 182), pygame.Rect(0, 0, 200, 20))
         self.all_sprites.update(dir)
+
         if self.current_box.attached:
             self.current_box.move_with_robot(self.robot.rect.center[0], self.robot.rect.center[1])
         else:
@@ -403,21 +488,23 @@ class Warehouse():
         if self.box1.is_end() and self.box2.is_end():
             self.done = True
             self.reward = 20
-
-        if self.robot.collided_with_window():
+        if self.robot.window_collision():
             self.reward = -2
             self.done = True
-
+        self.robot.update_target_pos(self.current_box.rect.center[0], self.current_box.rect.center[1])
         pygame.display.update()
-        self.state = [self.normalize(self.robot.rect.center[0]), self.normalize(self.robot.rect.center[1]),
-                      self.normalize(self.current_box.rect.center[0]),
-                      self.normalize(self.current_box.rect.center[1]),
-                      self.normalize(90), self.normalize(90),
-                      self.current_box.attached]
+        self.state = [self.robot.target_up, self.robot.target_bottom, self.robot.target_left, self.robot.target_right,
+                      self.current_box.attached,
+                      self.normalize(self.robot.rect.center[0]), self.normalize(self.robot.rect.center[1]),
+                      self.normalize(self.enemyBox.rect.center[0]),
+                      self.normalize(self.enemyBox.rect.center[1]),
+                      self.normalize(self.enemyBox1.rect.center[0]),
+                      self.normalize(self.enemyBox1.rect.center[1])]
         return self.state, self.reward, self.done
-    
-pygame.init()
-env = Warehouse()
+
+env = warehouse()
+
+
 for i_episode in range(3000):
     state = env.reset()
     state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
@@ -430,13 +517,32 @@ for i_episode in range(3000):
         ep_reward += reward
         reward = torch.tensor([reward], device=device)
         done = terminated
+        env.robot.remembered_actions.append(action)
         if terminated:
             next_state = None
         else:
             next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
 
+        memory.push(state, action, next_state, reward)
+
         state = next_state
 
+        optimize_model()
+        target_net_state_dict = target_net.state_dict()
+        policy_net_state_dict = policy_net.state_dict()
+        for key in policy_net_state_dict:
+            target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
+        target_net.load_state_dict(target_net_state_dict)
+
         step+=1
-        if(step > 3500):
+        if(step > 1700):
             done=True
+
+    if (i_episode % 10) == 0:
+        print('epsilon: ', epsilon)
+    #if (i_episode % 50) == 0:
+    #    torch.save(target_net.state_dict(), f'model sa enemy kutijama/model__{i_episode:_>7.2f}.pth')
+    if epsilon > MIN_EPSILON:
+        epsilon *= EPS_DECAY
+        epsilon = max(MIN_EPSILON, epsilon)
+
