@@ -46,15 +46,15 @@ class DQN(nn.Module):
 
 BATCH_SIZE = 128
 GAMMA = 0.99
-EPS_DECAY = 0.98
+EPS_DECAY = 0.993
 MIN_EPSILON = 0.001
 TAU = 0.005
 LR = 1e-4
 epsilon = 1
 policy_net = DQN(11, 8).to(device)
 target_net = DQN(11, 8).to(device)
-policy_net.load_state_dict(torch.load('model sa enemy kutijama/model1___100.00.pth'))
-target_net.load_state_dict(torch.load('model sa enemy kutijama/model1___100.00.pth'))
+policy_net.load_state_dict(torch.load('model sa enemy kutijama/model1___250.00.pth'))
+target_net.load_state_dict(torch.load('model sa enemy kutijama/model1___250.00.pth'))
 optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
 memory = ReplayMemory(30000)
 
@@ -66,7 +66,7 @@ def select_action(state):
     global steps_done
     sample = random.random()
     global epsilon
-    if sample > epsilon:
+    if sample > 0:
         with torch.no_grad():
 
             return policy_net(state).max(dim=1)[1].view(1, 1)
@@ -120,7 +120,7 @@ class Robot(pygame.sprite.Sprite):
         self.old_rect = self.rect.copy()
         self.pos = pygame.math.Vector2(self.rect.center)
         self.direction = pygame.math.Vector2()
-        self.speed = 2
+        self.speed = 0.1
         self.remembered_actions = deque([-1, -1, -1, -1], maxlen=4)
         self.target_left = 0
         self.target_right = 0
@@ -412,14 +412,14 @@ class warehouse():
 
     def set_enemy_box_pos(self):
         for enemy in self.enemies:
-            x = np.random.randint(32, 128)
-            y = np.random.randint(32, 128)
+            x = np.random.randint(32, 148)
+            y = np.random.randint(32, 148)
             enemy.rect = enemy.image.get_rect(center=(x, y))
             enemy.old_rect = enemy.rect.copy()
             enemy.pos = pygame.math.Vector2(enemy.rect.topleft)
     def get_robot_random_pos(self):
-        x = np.random.randint(60, 178)
-        y = np.random.randint(60, 178)
+        x = np.random.randint(2, 178)
+        y = np.random.randint(2, 178)
         return x, y
 
     def get_box_random_pos(self):
@@ -524,26 +524,9 @@ for i_episode in range(3000):
         else:
             next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
 
-        memory.push(state, action, next_state, reward)
-
         state = next_state
 
-        optimize_model()
-        target_net_state_dict = target_net.state_dict()
-        policy_net_state_dict = policy_net.state_dict()
-        for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
-        target_net.load_state_dict(target_net_state_dict)
-
         step+=1
-        if(step > 1700):
+        if(step > 6700):
             done=True
-
-    if (i_episode % 10) == 0:
-        print('epsilon: ', epsilon)
-    if (i_episode % 50) == 0:
-        torch.save(target_net.state_dict(), f'model sa enemy kutijama/model2__{i_episode:_>7.2f}.pth')
-    if epsilon > MIN_EPSILON:
-        epsilon *= EPS_DECAY
-        epsilon = max(MIN_EPSILON, epsilon)
 
