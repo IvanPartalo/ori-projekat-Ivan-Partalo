@@ -64,7 +64,7 @@ memory = ReplayMemory(30000)
 action = 0
 
 
-def select_action(state):
+def select_action(state):+
     sample = random.random()
     global epsilon
 
@@ -218,19 +218,19 @@ class Box(pygame.sprite.Sprite):
             return False
 
     def check_if_robot_attached(self, x, y):
-        if y - 13 <= self.rect.bottom <= y - 7 and self.rect.center[0] - 10 <= x <= self.rect.center[0] + 10:
+        if y - 13 <= self.rect.bottom <= y - 7 and self.rect.center[0] - 11 <= x <= self.rect.center[0] + 11:
             self.difference = self.rect.center[0] - x
             self.attached = 1
             self.attached_bottom = True
-        if self.rect.center[1] - 10 <= y <= self.rect.center[1] + 10 and x + 7 <= self.rect.left <= x + 13:
+        if self.rect.center[1] - 11 <= y <= self.rect.center[1] + 11 and x + 7 <= self.rect.left <= x + 13:
             self.difference = self.rect.center[1] - y
             self.attached = 1
             self.attached_left = True
-        if y + 7 <= self.rect.top <= y + 13 and self.rect.center[0] - 10 <= x <= self.rect.center[0] + 10:
+        if y + 7 <= self.rect.top <= y + 13 and self.rect.center[0] - 11 <= x <= self.rect.center[0] + 11:
             self.difference = self.rect.center[0] - x
             self.attached = 1
             self.attached_up = True
-        if self.rect.center[1] - 10 <= y <= self.rect.center[1] + 10 and x - 13 <= self.rect.right <= x - 7:
+        if self.rect.center[1] - 11 <= y <= self.rect.center[1] + 11 and x - 13 <= self.rect.right <= x - 7:
             self.difference = self.rect.center[1] - y
             self.attached = 1
             self.attached_right = True
@@ -351,6 +351,8 @@ class Warehouse():
 
     def position_possible(self, x, y):
         if (x-5) > 54 and (y-5) > 54 and (x+5) < 126 and (y+5) < 126:
+            return False
+        if x - 15 < self.robot.rect.center[0] < x + 15 and y - 15 < self.robot.rect.center[1] < y + 15:
             return False
         return True
 
