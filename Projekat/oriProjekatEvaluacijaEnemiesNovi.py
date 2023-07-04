@@ -549,7 +549,7 @@ for i_episode in range(3000):
         #target_net.load_state_dict(target_net_state_dict)
         #global_step += 1
         step+=1
-        if(step > 3500):
+        if(step > 2500):
             done=True
 '''
     if(global_step > 50100):
