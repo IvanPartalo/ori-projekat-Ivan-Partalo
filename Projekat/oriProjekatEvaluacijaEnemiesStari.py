@@ -120,7 +120,7 @@ class Robot(pygame.sprite.Sprite):
         self.old_rect = self.rect.copy()
         self.pos = pygame.math.Vector2(self.rect.center)
         self.direction = pygame.math.Vector2()
-        self.speed = 0.1
+        self.speed = 1
         self.remembered_actions = deque([-1, -1, -1, -1], maxlen=4)
         self.target_left = 0
         self.target_right = 0
@@ -527,6 +527,6 @@ for i_episode in range(3000):
         state = next_state
 
         step+=1
-        if(step > 6700):
+        if(step > 3700):
             done=True
 

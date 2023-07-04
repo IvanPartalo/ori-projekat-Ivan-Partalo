@@ -129,7 +129,7 @@ class Robot(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(topleft = (90, 130))
         self.pos = pygame.math.Vector2(self.rect.topleft)
         self.direction = pygame.math.Vector2()
-        self.speed = 1
+        self.speed = 3
     def move(self, dir):
         
         if dir == 0: 
@@ -350,6 +350,8 @@ class Warehouse():
         return x, y
 
     def position_possible(self, x, y):
+        if y>80 and y<105 and x<40:
+            return False
         if (x-5) > 54 and (y-5) > 54 and (x+5) < 126 and (y+5) < 126:
             return False
         if x - 15 < self.robot.rect.center[0] < x + 15 and y - 15 < self.robot.rect.center[1] < y + 15:
@@ -440,5 +442,5 @@ for i_episode in range(3000):
         state = next_state
 
         step+=1
-        if(step > 5500):
+        if(step > 2500):
             done=True
