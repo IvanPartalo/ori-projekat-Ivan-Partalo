@@ -58,8 +58,8 @@ LR = 0.005
 epsilon = 1
 policy_net = DQN(13, 8).to(device)
 target_net = DQN(13, 8).to(device)
-policy_net.load_state_dict(torch.load('model sa enemy kutijama/model3enntarget___300.00.pth'))
-target_net.load_state_dict(torch.load('model sa enemy kutijama/model3enntarget___300.00.pth'))
+policy_net.load_state_dict(torch.load('model sa enemy kutijama/novimodel3enpol___300.00.pth'))
+target_net.load_state_dict(torch.load('model sa enemy kutijama/novimodel3enpol___300.00.pth'))
 optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
 scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
@@ -435,7 +435,7 @@ class warehouse():
 
     def get_box_random_pos(self):
         x = np.random.randint(32, 168)
-        y = np.random.randint(32, 168)
+        y = np.random.randint(42, 178)
         return x, y
 
     def position_possible(self, x, y):
@@ -458,11 +458,11 @@ class warehouse():
 
     def update_reward(self):
         if self.enemyBox.hitted() != 0:
-            self.reward = self.enemyBox.hitted()/5
+            self.reward = self.enemyBox.hitted()/8
         elif self.enemyBox1.hitted() != 0:
-            self.reward = self.enemyBox1.hitted()/5
+            self.reward = self.enemyBox1.hitted()/8
         elif self.enemyBox2.hitted() != 0:
-            self.reward = self.enemyBox2.hitted() / 5
+            self.reward = self.enemyBox2.hitted() / 8
         elif self.current_box.is_closer_to_target():
             self.reward = 0.25
         elif self.current_box.is_further_from_target():

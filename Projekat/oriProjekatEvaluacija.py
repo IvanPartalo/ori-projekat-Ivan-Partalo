@@ -56,19 +56,19 @@ LR = 1e-4
 epsilon = 1
 policy_net = DQN(7, 8).to(device)
 target_net = DQN(7, 8).to(device)
-policy_net.load_state_dict(torch.load('model sa vise kutija/model_ 600.00.pth'))
-target_net.load_state_dict(torch.load('model sa vise kutija/model_ 600.00.pth'))
+policy_net.load_state_dict(torch.load('model sa vise kutija/model_ 500.00.pth'))
+target_net.load_state_dict(torch.load('model sa vise kutija/model_ 500.00.pth'))
 optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
 memory = ReplayMemory(30000)
 
 action = 0
 
 
-def select_action(state):+
+def select_action(state):
     sample = random.random()
     global epsilon
 
-    if sample > 0.125:
+    if sample > 0:
         with torch.no_grad():
             #max(dim=1) vrati najveci broj u izlazu, [1] vrati indeks gde je nadjen (a to je akcija koja ce se izvrsiti)
             return policy_net(state).max(dim=1)[1].view(1, 1)
@@ -129,7 +129,7 @@ class Robot(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(topleft = (90, 130))
         self.pos = pygame.math.Vector2(self.rect.topleft)
         self.direction = pygame.math.Vector2()
-        self.speed = 2
+        self.speed = 1
     def move(self, dir):
         
         if dir == 0: 
@@ -440,5 +440,5 @@ for i_episode in range(3000):
         state = next_state
 
         step+=1
-        if(step > 3500):
+        if(step > 5500):
             done=True
