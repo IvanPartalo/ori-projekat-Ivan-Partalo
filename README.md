@@ -19,3 +19,5 @@ Za korišćenje je potrebno:
 -   torch (korišćena verzija 2.0.1)
 -   pygame (korišćena verzija 2.3.0)
 
+Napomena: ako se stvara problem zbog putanje virtual environment-a, može se pokrenuti preko komandne linije:
+python oriProjekatEvaluacija.py
